@@ -13,9 +13,10 @@ log = logging.getLogger("qtrade")
 
 
 class APIException(Exception):
-    def __init__(self, message, code):
+    def __init__(self, message, code, errors):
         super().__init__(message)
         self.code = code
+        self.errors = errors
 
 
 class QtradeAuth(requests.auth.AuthBase):
