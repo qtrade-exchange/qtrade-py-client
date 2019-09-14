@@ -34,7 +34,10 @@ class QtradeAuth(requests.auth.AuthBase):
         request_details += uri + "\n"
         request_details += timestamp + "\n"
         if req.body:
-            request_details += req.body.decode('utf8') + "\n"
+            if isinstance(req.body, str):
+                request_details += req.body + "\n"
+            else:
+                request_details += req.body.decode('utf8') + "\n"
         else:
             request_details += "\n"
         request_details += self.key
