@@ -1,7 +1,7 @@
 import requests
 import requests.auth
 import time
-import json
+import json as _json
 import urllib.parse
 import logging
 import base64
@@ -64,9 +64,15 @@ class QtradeAPI(object):
             self.set_hmac(key)
 
     def clone(self):
+        """ Returns a new QtradeAPI instance with stripped auth but the same
+        endpoint configuration. Useful for testing toolchains that might point
+        at multiple testing endpoints and 'inherit' from some base endpoint
+        config """
         return type(self)(self.endpoint)
 
     def login(self, email, password):
+        """ Login with username and password to get a JWT token. Not
+        recommended for production use, but can be okay for quick testing. """
         resp = self._req('post', "/v1/login", json={
             "email": email,
             "password": password,
@@ -87,14 +93,36 @@ class QtradeAPI(object):
     def post(self, endpoint, *args, **kwargs):
         return self._req('post', endpoint, *args, **kwargs)
 
-    def _req(self, method, endpoint, *args, silent_codes=[], stream=False, **kwargs):
-        headers = kwargs.setdefault("headers", {})
+    def orders(self, open=None, older_than=None, newer_than=None):
+        if isinstance(open, bool):
+            open = str(open).lower()
+        return self.get("/v1/user/orders", open=open, older_than=older_than, newer_than=newer_than)['orders']
+
+    def _req(self, method, endpoint, silent_codes=[], headers={}, json=None, params=None, **kwargs):
+        # Inject the auth token header if applicable
         if self.token:
             headers['Authorization'] = "Bearer {}".format(self.token)
+
+        # We remove all kwargs that might be intended for our session.request
+        requests_kwarg_keys = ['data', 'cookies', 'files', 'auth', 'timeout', 'allow_redirects', 'proxies', 'hooks', 'stream', 'verify', 'cert']
+        requests_kwargs = {}
+        for key in requests_kwarg_keys:
+            requests_kwargs[key] = kwargs.pop(key, None)
+
         url = urllib.parse.urljoin(self.endpoint, endpoint)
-        req_json = json.dumps(kwargs.get('json'))
-        res = getattr(self.rs, method)(url, *args, stream=stream, **kwargs)
-        if stream is True:
+
+        # Support legacy usage of the json parameter, but prefer passing POST
+        # params as kwargs
+        if method.lower() == "post" and json is None:
+            json = kwargs
+        req_json = _json.dumps(json)
+
+        # Support passing params just because...
+        if method.lower() == "get" and params is None:
+            params = kwargs
+
+        res = self.rs.request(method, url, headers=headers, json=json, params=params, **requests_kwargs)
+        if requests_kwargs.get('stream') is True:
             log.debug("GET streaming {}".format(url))
             for ln in res.iter_lines():
                 print(ln.decode('utf8'))
