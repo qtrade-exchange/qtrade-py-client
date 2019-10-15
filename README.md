@@ -17,6 +17,13 @@ client = QtradeAPI("https://api.qtrade.io", key=hmac_keypair)
 
 result = client.post("/v1/user/sell_limit", amount="1", price="0.0001", market_id=12)
 print(result)
+
+# Only closed orders
+print(client.orders(open=False))
+# Print all orders before ID 25
+print(client.orders(older_than=25))
+# Print all orders after ID 25
+print(client.orders(newer_than=25))
 ```
 
 ## Logging
