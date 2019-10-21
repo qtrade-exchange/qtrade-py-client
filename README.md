@@ -26,6 +26,23 @@ print(client.orders(older_than=25))
 print(client.orders(newer_than=25))
 ```
 
+## Rate Limit
+
+By default the `QtradeAPI` will honor and avoid rate limits. It does this with
+three peices of logic:
+
+1. If the rate limit would be hit, it will sleep until the reset time. (Hard
+   limit avoidance)
+2. If >50% of the limit has been used it will sleep a proportional amount of
+   time to avoid hitting the hard limit. This allows bursting and avoids long
+   sleeps. This can be configured by setting `client.rl_soft_threshold` to
+   values between 0 and 1. A value of 1 will disable soft limits entirely (full burst).
+3. If a `429 Limit Exceeded` is encountered, it will transparently retry one
+   time. This is to prime the rate limit counter variables in the case that the
+   very first request hits the rate limit.
+
+`client.honor_ratelimit` may be set to `False` to disable rate limit logic completely.
+
 ## Logging
 
 Verbose logging from the QtradeAPI class can help debug integration problems.
