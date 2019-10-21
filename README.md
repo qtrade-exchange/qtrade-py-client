@@ -3,7 +3,7 @@
 Only guaranteed to work on Python3, but PRs for Python2.7 will be accepted.
 
 ``` bash
-pip3 install --user git+https://github.com/qtrade-exchange/qtrade-py-client.git
+pip3 install --upgrade --user git+https://github.com/qtrade-exchange/qtrade-py-client.git
 ```
 
 ## Basic Usage
