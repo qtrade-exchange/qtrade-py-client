@@ -107,20 +107,20 @@ class QtradeAPI(object):
         return self.get("/v1/user/orders", open=open, older_than=older_than, newer_than=newer_than)['orders']
 
     def _req(self, method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
-        # If limit is >self.rl_soft_threshold % used, sleep the appropriate
-        # amount to avoid hitting a big wait
-        soft_limit = int(self.rl_limit * (1 - self.rl_soft_threshold))
-        if self.honor_ratelimit and self.rl_remaining <= soft_limit:
-            sec_to_reset = self.rl_reset_at - time.time()
-            must_wait = max(0, sec_to_reset / float(self.rl_remaining))
-            time.sleep(must_wait)
-
         # If limit is completely exhausted, sleep until full reset. Clamp to
         # min 0 to not bomb out if reset_at is in past
         if self.honor_ratelimit and self.rl_remaining <= 0:
             must_wait = max(0, self.rl_reset_at - time.time())
             if must_wait >= 5:
                 log.info("Ratelimit hit, sleeping for {:,}".format(must_wait))
+            time.sleep(must_wait)
+
+        # If limit is >self.rl_soft_threshold % used, sleep the appropriate
+        # amount to avoid hitting a big wait
+        soft_limit = int(self.rl_limit * (1 - self.rl_soft_threshold))
+        if self.honor_ratelimit and self.rl_remaining <= soft_limit:
+            sec_to_reset = self.rl_reset_at - time.time()
+            must_wait = max(0, sec_to_reset / float(self.rl_remaining))
             time.sleep(must_wait)
 
         # Inject the auth token header if applicable
