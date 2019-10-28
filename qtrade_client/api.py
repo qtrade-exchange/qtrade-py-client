@@ -12,6 +12,11 @@ from urllib.parse import urlparse
 log = logging.getLogger("qtrade")
 
 
+class Currency(dict):
+    def __value__(self):
+        return self.code
+
+
 class APIException(Exception):
     def __init__(self, message, code, errors):
         super().__init__(message)
@@ -105,6 +110,29 @@ class QtradeAPI(object):
         if isinstance(open, bool):
             open = str(open).lower()
         return self.get("/v1/user/orders", open=open, older_than=older_than, newer_than=newer_than)['orders']
+
+    def order(self, market_id=None, market_string=None):
+        if market_id is not None and market_string is not None:
+            raise ValueError("market_id and market_string are mutually exclusive")
+        if market_string is not None:
+            market_id = self.markets[market_string]['id']
+
+    def balances_all(self):
+        pass
+
+    def balances_merged(self):
+        pass
+
+    @property
+    def markets(self):
+        # Index our market information by market string
+        common = self.api.get("/v1/common")
+        self.currencies_map = {c['code']: c for c in common['currencies']}
+        # Set some convenience keys so we can pass around just the dict
+        for m in common['markets']:
+            m['string'] = "{market_currency}_{base_currency}".format(**m)
+            m['base_currency'] = self.currencies_map[m['base_currency']]
+        self.market_map = {m['string']: m for m in common['markets']}
 
     def _req(self, method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
         # If limit is completely exhausted, sleep until full reset. Clamp to
