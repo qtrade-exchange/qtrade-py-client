@@ -70,7 +70,10 @@ class QtradeAPI(object):
         if key is not None:
             self.set_hmac(key)
         self._markets_map = None
+        self._markets_id = None
         self._markets_age = 0
+        self._tickers = None
+        self._tickers_age = 0
         self.honor_ratelimit = True
         self.rl_remaining = 99
         self.rl_reset_at = time.time()
@@ -114,7 +117,7 @@ class QtradeAPI(object):
             open = str(open).lower()
         return self.get("/v1/user/orders", open=open, older_than=older_than, newer_than=newer_than)['orders']
 
-    def order(self, order_type, value, price, market_id=None, market_string=None):
+    def order(self, order_type, value, price, market_id=None, market_string=None, prevent_taker=True):
         # TODO: allow for amount and value?
         if market_id is not None and market_string is not None:
             raise ValueError("market_id and market_string are mutually exclusive")
@@ -122,6 +125,10 @@ class QtradeAPI(object):
             raise ValueError("either market_id or market_string are required")
         if market_string is not None:
             market_id = self.markets[market_string]['id']
+        taker = (price > self.tickers[market_id]['ask'] and order_type == 'buy_limit') or (price < self.tickers[market_id]['ask'] and order_type == 'sell_limit')
+        if prevent_taker and taker:
+            log.info("%s taker order on market %s at price %s was not placed", order_type, market_id, price)
+            return
         if order_type == 'buy_limit':
             value = (Decimal(value) / Decimal(price)).quantize(COIN)
             fee = self.get('/v1/market/{}'.format(market_id))['taker_fee']
@@ -135,14 +142,13 @@ class QtradeAPI(object):
         """ Get total balances including order balances """
         bals = self.balances()
         ords = self.orders(open=True)
-        marks = {m['id']:m for m in self.get('/v1/markets')['markets']}
         for o in ords:
-            base_c = marks[o['market_id']]['base_currency']
-            market_c = marks[o['market_id']]['market_currency']
+            base_c = self.markets_id[o['market_id']]['base_currency']['code']
+            market_c = self.markets_id[o['market_id']]['market_currency']['code']
             if o['order_type'] == 'buy_limit':
                 bals[base_c] = str(Decimal(bals.setdefault(base_c, 0)) + Decimal(o['base_amount']))
-            elif o['order_type'] == 'sell_limit':
-                bals[market_c] = str(Decimal(bals.setdefault(market_c, 0)) + Decimal(o['market_amount']))
+            if o['order_type'] == 'sell_limit':
+                bals[market_c] = str(Decimal(bals.setdefault(market_c, 0)) + Decimal(o['market_amount_remaining']))
         return bals
 
     def balances_all(self):
@@ -153,9 +159,27 @@ class QtradeAPI(object):
             self.post('/v1/user/cancel_order', json={'id': o['id']})
 
     @property
+    def tickers(self):
+        self._refresh_tickers()
+        return self._tickers
+
+    def _refresh_tickers(self):
+        if self._tickers is None or (time.time() - self._tickers_age) > 180:
+            res = self.get('/v1/tickers')
+            self._tickers = {m['id']: m for m in res['markets']}
+            #self._tickers.update({m['id_hr']: m for m in res['markets']})
+            self._tickers_age = time.time()
+
+    @property
     def markets(self):
         self._refresh_markets()
         return self._market_map
+
+    @property
+    def markets_id(self):
+        self._refresh_markets()
+        return self._markets_id
+    
 
     def _refresh_markets(self):
         """ Lazy load and reload every 180 seconds """
@@ -169,6 +193,7 @@ class QtradeAPI(object):
                 m['base_currency'] = self.currencies_map[m['base_currency']]
                 m['market_currency'] = self.currencies_map[m['market_currency']]
             self._market_map = {m['string']: m for m in common['markets']}
+            self._markets_id = {m['id']: m for m in common['markets']}
             self._markets_age = time.time()
 
     def _req(self, method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
