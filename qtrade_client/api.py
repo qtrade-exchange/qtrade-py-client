@@ -8,8 +8,11 @@ import base64
 
 from hashlib import sha256
 from urllib.parse import urlparse
+from decimal import Decimal
 
 log = logging.getLogger("qtrade")
+
+COIN = Decimal('.00000001')
 
 
 class Currency(dict):
@@ -61,13 +64,13 @@ class QtradeAPI(object):
         self.user_id = None
         self.email = email
         self.endpoint = endpoint
-        self.markets = {}
         self.origin = origin
         self.token = None
         self.rs = requests.Session()
         if key is not None:
             self.set_hmac(key)
-
+        self._markets_map = None
+        self._markets_age = 0
         self.honor_ratelimit = True
         self.rl_remaining = 99
         self.rl_reset_at = time.time()
@@ -111,28 +114,62 @@ class QtradeAPI(object):
             open = str(open).lower()
         return self.get("/v1/user/orders", open=open, older_than=older_than, newer_than=newer_than)['orders']
 
-    def order(self, market_id=None, market_string=None):
+    def order(self, order_type, value, price, market_id=None, market_string=None):
+        # TODO: allow for amount and value?
         if market_id is not None and market_string is not None:
             raise ValueError("market_id and market_string are mutually exclusive")
+        if market_id is None and market_string is None:
+            raise ValueError("either market_id or market_string are required")
         if market_string is not None:
             market_id = self.markets[market_string]['id']
+        if order_type == 'buy_limit':
+            value = (Decimal(value) / Decimal(price)).quantize(COIN)
+            fee = self.get('/v1/market/{}'.format(market_id))['taker_fee']
+            value = value - fee
+        self.post('/v1/user/{}'.format(order_type),
+                    amount=str(value),
+                    price=str(price),
+                    market_id=market_id)
+
+    def balances_merged(self):
+        """ Get total balances including order balances """
+        bals = self.balances()
+        ords = self.orders(open=True)
+        marks = {m['id']:m for m in self.get('/v1/markets')['markets']}
+        for o in ords:
+            base_c = marks[o['market_id']]['base_currency']
+            market_c = marks[o['market_id']]['market_currency']
+            if o['order_type'] == 'buy_limit':
+                bals[base_c] = str(Decimal(bals.setdefault(base_c, 0)) + Decimal(o['base_amount']))
+            elif o['order_type'] == 'sell_limit':
+                bals[market_c] = str(Decimal(bals.setdefault(market_c, 0)) + Decimal(o['market_amount']))
+        return bals
 
     def balances_all(self):
         pass
 
-    def balances_merged(self):
-        pass
+    def cancel_all_orders(self):
+        for o in self.orders(open=True):
+            self.post('/v1/user/cancel_order', json={'id': o['id']})
 
     @property
     def markets(self):
-        # Index our market information by market string
-        common = self.api.get("/v1/common")
-        self.currencies_map = {c['code']: c for c in common['currencies']}
-        # Set some convenience keys so we can pass around just the dict
-        for m in common['markets']:
-            m['string'] = "{market_currency}_{base_currency}".format(**m)
-            m['base_currency'] = self.currencies_map[m['base_currency']]
-        self.market_map = {m['string']: m for m in common['markets']}
+        self._refresh_markets()
+        return self._market_map
+
+    def _refresh_markets(self):
+        """ Lazy load and reload every 180 seconds """
+        if self._markets_map is None or (time.time() - self._markets_age) > 180:
+            # Index our market information by market string
+            common = self.get("/v1/common")
+            self.currencies_map = {c['code']: c for c in common['currencies']}
+            # Set some convenience keys so we can pass around just the dict
+            for m in common['markets']:
+                m['string'] = "{market_currency}_{base_currency}".format(**m)
+                m['base_currency'] = self.currencies_map[m['base_currency']]
+                m['market_currency'] = self.currencies_map[m['market_currency']]
+            self._market_map = {m['string']: m for m in common['markets']}
+            self._markets_age = time.time()
 
     def _req(self, method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
         # If limit is completely exhausted, sleep until full reset. Clamp to
