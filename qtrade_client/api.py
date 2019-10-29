@@ -13,14 +13,18 @@ from decimal import Decimal
 log = logging.getLogger("qtrade")
 
 COIN = Decimal('.00000001')
+TICKERS_UPDATE_INTERVAL = 180
+MARKET_UPDATE_INTERVAL = 180
 
 
 class Currency(dict):
+
     def __value__(self):
         return self.code
 
 
 class APIException(Exception):
+
     def __init__(self, message, code, errors):
         super().__init__(message)
         self.code = code
@@ -28,6 +32,7 @@ class APIException(Exception):
 
 
 class QtradeAuth(requests.auth.AuthBase):
+
     def __init__(self, key):
         self.key_id, self.key = key.split(":")
 
@@ -60,6 +65,7 @@ class QtradeAuth(requests.auth.AuthBase):
 
 
 class QtradeAPI(object):
+
     def __init__(self, endpoint, origin=None, email='Unk', key=None):
         self.user_id = None
         self.email = email
@@ -70,7 +76,6 @@ class QtradeAPI(object):
         if key is not None:
             self.set_hmac(key)
         self._markets_map = None
-        self._markets_id = None
         self._markets_age = 0
         self._tickers = None
         self._tickers_age = 0
@@ -117,26 +122,34 @@ class QtradeAPI(object):
             open = str(open).lower()
         return self.get("/v1/user/orders", open=open, older_than=older_than, newer_than=newer_than)['orders']
 
-    def order(self, order_type, value, price, market_id=None, market_string=None, prevent_taker=True):
+    def order(self, order_type, price, value=None, amount=None, market_id=None, market_string=None, prevent_taker=False):
         # TODO: allow for amount and value?
         if market_id is not None and market_string is not None:
-            raise ValueError("market_id and market_string are mutually exclusive")
+            raise ValueError(
+                "market_id and market_string are mutually exclusive")
         if market_id is None and market_string is None:
             raise ValueError("either market_id or market_string are required")
         if market_string is not None:
             market_id = self.markets[market_string]['id']
-        taker = (price > self.tickers[market_id]['ask'] and order_type == 'buy_limit') or (price < self.tickers[market_id]['ask'] and order_type == 'sell_limit')
-        if prevent_taker and taker:
-            log.info("%s taker order on market %s at price %s was not placed", order_type, market_id, price)
-            return
+        if prevent_taker is True:
+            ticker = self.tickers[market_id]
+            # TODO: mention the bid/ask price
+            if order_type == "buy_limit" and price > ticker['ask']:
+                log.info("%s %s at %s was not placed.  Ask price is %s, so it would have been a taker order.",
+                         market_id, order_type, price, ticker['ask'])
+                return
+            if order_type == 'sell_limit' and price < ticker['bid']:
+                log.info("%s %s at %s was not placed.  Bid price is %s, so it would have been a taker order.",
+                         market_id, order_type, price, ticker['bid'])
+                return
         if order_type == 'buy_limit':
             value = (Decimal(value) / Decimal(price)).quantize(COIN)
             fee = self.get('/v1/market/{}'.format(market_id))['taker_fee']
             value = value - fee
         self.post('/v1/user/{}'.format(order_type),
-                    amount=str(value),
-                    price=str(price),
-                    market_id=market_id)
+                  amount=str(value),
+                  price=str(price),
+                  market_id=market_id)
 
     def balances_merged(self):
         """ Get total balances including order balances """
@@ -144,14 +157,18 @@ class QtradeAPI(object):
         ords = self.orders(open=True)
         for o in ords:
             base_c = self.markets_id[o['market_id']]['base_currency']['code']
-            market_c = self.markets_id[o['market_id']]['market_currency']['code']
+            market_c = self.markets_id[o['market_id']][
+                'market_currency']['code']
             if o['order_type'] == 'buy_limit':
-                bals[base_c] = str(Decimal(bals.setdefault(base_c, 0)) + Decimal(o['base_amount']))
+                bals[base_c] = str(Decimal(bals.setdefault(
+                    base_c, 0)) + Decimal(o['base_amount']))
             if o['order_type'] == 'sell_limit':
-                bals[market_c] = str(Decimal(bals.setdefault(market_c, 0)) + Decimal(o['market_amount_remaining']))
+                bals[market_c] = str(Decimal(bals.setdefault(
+                    market_c, 0)) + Decimal(o['market_amount_remaining']))
         return bals
 
     def balances_all(self):
+        # hit balances_all endpoint and mirror format
         pass
 
     def cancel_all_orders(self):
@@ -160,30 +177,27 @@ class QtradeAPI(object):
 
     @property
     def tickers(self):
+        """ Tickers may be indexed either by market id or market string """
         self._refresh_tickers()
         return self._tickers
 
     def _refresh_tickers(self):
-        if self._tickers is None or (time.time() - self._tickers_age) > 180:
+        """ Lazy load and reload every TICKERS_UPDATE_INTERVAL. """
+        if self._tickers is None or (time.time() - self._tickers_age) > TICKERS_UPDATE_INTERVAL:
             res = self.get('/v1/tickers')
             self._tickers = {m['id']: m for m in res['markets']}
-            #self._tickers.update({m['id_hr']: m for m in res['markets']})
+            self._tickers.update({m['id_hr']: m for m in res['markets']})
             self._tickers_age = time.time()
 
     @property
     def markets(self):
+        """ Markets may be indexed either by id or string """
         self._refresh_markets()
         return self._market_map
 
-    @property
-    def markets_id(self):
-        self._refresh_markets()
-        return self._markets_id
-    
-
     def _refresh_markets(self):
-        """ Lazy load and reload every 180 seconds """
-        if self._markets_map is None or (time.time() - self._markets_age) > 180:
+        """ Lazy load and reload every MARKET_UPDATE_INTERVAL. """
+        if self._markets_map is None or (time.time() - self._markets_age) > MARKET_UPDATE_INTERVAL:
             # Index our market information by market string
             common = self.get("/v1/common")
             self.currencies_map = {c['code']: c for c in common['currencies']}
@@ -193,7 +207,7 @@ class QtradeAPI(object):
                 m['base_currency'] = self.currencies_map[m['base_currency']]
                 m['market_currency'] = self.currencies_map[m['market_currency']]
             self._market_map = {m['string']: m for m in common['markets']}
-            self._markets_id = {m['id']: m for m in common['markets']}
+            self._market_map.update({m['id']: m for m in common['markets']})
             self._markets_age = time.time()
 
     def _req(self, method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
@@ -218,7 +232,8 @@ class QtradeAPI(object):
             headers['Authorization'] = "Bearer {}".format(self.token)
 
         # We remove all kwargs that might be intended for our session.request
-        requests_kwarg_keys = ['data', 'cookies', 'files', 'auth', 'timeout', 'allow_redirects', 'proxies', 'hooks', 'stream', 'verify', 'cert']
+        requests_kwarg_keys = ['data', 'cookies', 'files', 'auth', 'timeout',
+                               'allow_redirects', 'proxies', 'hooks', 'stream', 'verify', 'cert']
         requests_kwargs = {}
         for key in requests_kwarg_keys:
             requests_kwargs[key] = kwargs.pop(key, None)
@@ -235,7 +250,8 @@ class QtradeAPI(object):
         if method.lower() == "get" and params is None:
             params = kwargs
 
-        res = self.rs.request(method, url, headers=headers, json=json, params=params, **requests_kwargs)
+        res = self.rs.request(method, url, headers=headers,
+                              json=json, params=params, **requests_kwargs)
         self.rl_reset_at = time.time() + int(res.headers.get('X-Ratelimit-Reset', 0))
         self.rl_limit = int(res.headers.get('X-Ratelimit-Limit', 100))
         self.rl_remaining = int(res.headers.get('X-Ratelimit-Remaining', 99))
@@ -256,7 +272,8 @@ class QtradeAPI(object):
             if res.status_code > 299:
                 log.warn("{} {} {} req={} res=\n{}".format(
                     method, url, res.status_code, req_json, res.text))
-                raise APIException("Invalid return code from backend", res.status_code, [])
+                raise APIException(
+                    "Invalid return code from backend", res.status_code, [])
             else:
                 return True
 
@@ -265,7 +282,8 @@ class QtradeAPI(object):
                 log.warn("{} {} {} req={} res=\n{}".format(
                     method, url, res.status_code, req_json, res.text))
             errors = [e['code'] for e in ret['errors']]
-            raise APIException("Invalid return code from backend", res.status_code, errors)
+            raise APIException(
+                "Invalid return code from backend", res.status_code, errors)
 
         log.debug("GET {} req={} res={}".format(url, req_json, ret))
         return ret['data']
