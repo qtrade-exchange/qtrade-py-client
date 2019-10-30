@@ -9,6 +9,7 @@ import base64
 from hashlib import sha256
 from urllib.parse import urlparse
 from decimal import Decimal
+from pprint import pprint
 
 log = logging.getLogger("qtrade")
 
@@ -123,17 +124,17 @@ class QtradeAPI(object):
         return self.get("/v1/user/orders", open=open, older_than=older_than, newer_than=newer_than)['orders']
 
     def order(self, order_type, price, value=None, amount=None, market_id=None, market_string=None, prevent_taker=False):
-        # TODO: allow for amount and value?
         if market_id is not None and market_string is not None:
             raise ValueError(
                 "market_id and market_string are mutually exclusive")
         if market_id is None and market_string is None:
             raise ValueError("either market_id or market_string are required")
+        if value is None and amount is None:
+            raise ValueError("either value or amount are required")
         if market_string is not None:
             market_id = self.markets[market_string]['id']
         if prevent_taker is True:
             ticker = self.tickers[market_id]
-            # TODO: mention the bid/ask price
             if order_type == "buy_limit" and price > ticker['ask']:
                 log.info("%s %s at %s was not placed.  Ask price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['ask'])
@@ -143,11 +144,14 @@ class QtradeAPI(object):
                          market_id, order_type, price, ticker['bid'])
                 return
         if order_type == 'buy_limit':
-            value = (Decimal(value) / Decimal(price)).quantize(COIN)
-            fee = self.get('/v1/market/{}'.format(market_id))['taker_fee']
-            value = value - fee
+            if value is not None:
+                amount = (Decimal(value) / Decimal(price)).quantize(COIN)
+            fee = self.markets[market_id]['taker_fee']
+            amount = (Decimal(amount) - Decimal(fee)).quantize(COIN)
+        elif order_type == 'sell_limit' and value is not None:
+            amount = value
         self.post('/v1/user/{}'.format(order_type),
-                  amount=str(value),
+                  amount=str(amount),
                   price=str(price),
                   market_id=market_id)
 
@@ -156,8 +160,8 @@ class QtradeAPI(object):
         bals = self.balances()
         ords = self.orders(open=True)
         for o in ords:
-            base_c = self.markets_id[o['market_id']]['base_currency']['code']
-            market_c = self.markets_id[o['market_id']][
+            base_c = self.markets[o['market_id']]['base_currency']['code']
+            market_c = self.markets[o['market_id']][
                 'market_currency']['code']
             if o['order_type'] == 'buy_limit':
                 bals[base_c] = str(Decimal(bals.setdefault(
@@ -168,8 +172,7 @@ class QtradeAPI(object):
         return bals
 
     def balances_all(self):
-        # hit balances_all endpoint and mirror format
-        pass
+        return {b['currency']: b for b in self.get("/v1/user/balances_all")['balances']}
 
     def cancel_all_orders(self):
         for o in self.orders(open=True):
