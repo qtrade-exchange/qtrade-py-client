@@ -133,13 +133,14 @@ class QtradeAPI(object):
             raise ValueError("either value or amount are required")
         if market_string is not None:
             market_id = self.markets[market_string]['id']
+        price = Decimal(price)
         if prevent_taker is True:
             ticker = self.tickers[market_id]
-            if order_type == "buy_limit" and price > ticker['ask']:
+            if order_type == "buy_limit" and price > Decimal(ticker['ask']):
                 log.info("%s %s at %s was not placed.  Ask price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['ask'])
                 return
-            if order_type == 'sell_limit' and price < ticker['bid']:
+            if order_type == 'sell_limit' and price < Decimal(ticker['bid']):
                 log.info("%s %s at %s was not placed.  Bid price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['bid'])
                 return
