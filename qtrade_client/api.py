@@ -148,7 +148,7 @@ class QtradeAPI(object):
             if value is not None:
                 amount = (Decimal(value) / Decimal(price)).quantize(COIN)
             fee = Decimal(self.markets[market_id]['taker_fee']).quantize(
-                COIN, rounding=ROUND_UP)
+                COIN, rounding='ROUND_UP')
             amount = (Decimal(amount) - fee).quantize(COIN)
         elif order_type == 'sell_limit' and value is not None:
             amount = value
