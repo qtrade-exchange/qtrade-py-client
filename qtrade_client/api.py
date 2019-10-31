@@ -147,9 +147,9 @@ class QtradeAPI(object):
         if order_type == 'buy_limit':
             if value is not None:
                 amount = (Decimal(value) / Decimal(price)).quantize(COIN)
-            fee = Decimal(self.markets[market_id]['taker_fee']).quantize(
+            fee = Decimal(self.markets[market_id]['taker_fee']*Decimal(amount)).quantize(
                 COIN, rounding='ROUND_UP')
-            amount = (Decimal(amount) - fee).quantize(COIN)
+            amount = (amount - fee).quantize(COIN)
         elif order_type == 'sell_limit' and value is not None:
             amount = value
         logging.debug("Placing %s on %s market for %s at %s",
@@ -294,12 +294,3 @@ class QtradeAPI(object):
 
         log.debug("GET {} req={} res={}".format(url, req_json, ret))
         return ret['data']
-
-
-if __name__ == "__main__":
-    api = QtradeAPI('https://api.qtrade.io',
-                    key=open('lpbot_hmac.txt', 'r').read().strip())
-    pprint(api.balances_merged())
-    pprint(api.balances())
-    api.order('sell_limit', '0.00000028', market_string='DOGE_BTC',
-              value='500', prevent_taker=True)
