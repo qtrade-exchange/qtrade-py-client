@@ -13,8 +13,6 @@ from decimal import Decimal
 log = logging.getLogger("qtrade")
 
 COIN = Decimal('.00000001')
-TICKERS_UPDATE_INTERVAL = 180
-MARKET_UPDATE_INTERVAL = 180
 
 
 class Currency(dict):
@@ -75,6 +73,10 @@ class QtradeAPI(object):
         self.rs = requests.Session()
         if key is not None:
             self.set_hmac(key)
+
+        self.tickers_update_interval = 180
+        self.market_update_interval = 180
+
         self._markets_map = None
         self._markets_age = 0
         self._tickers = None
@@ -123,13 +125,18 @@ class QtradeAPI(object):
         return self.get("/v1/user/orders", open=open, older_than=older_than, newer_than=newer_than)['orders']
 
     def order(self, order_type, price, value=None, amount=None, market_id=None, market_string=None, prevent_taker=False):
+        """ Place an order with the given parameters.
+        value = amount * price """
         if market_id is not None and market_string is not None:
             raise ValueError(
                 "market_id and market_string are mutually exclusive")
-        if market_id is None and market_string is None:
+        elif market_id is None and market_string is None:
             raise ValueError("either market_id or market_string are required")
-        if value is None and amount is None:
+        if value is not None and amount is not None:
+            raise ValueError("value and amount are mutually exclusive")
+        elif value is None and amount is None:
             raise ValueError("either value or amount are required")
+
         if market_string is not None:
             market_id = self.markets[market_string]['id']
         price = Decimal(price)
@@ -139,20 +146,16 @@ class QtradeAPI(object):
                 log.info("%s %s at %s was not placed.  Ask price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['ask'])
                 return
-            if order_type == 'sell_limit' and price < Decimal(ticker['bid']):
+            elif order_type == 'sell_limit' and price < Decimal(ticker['bid']):
                 log.info("%s %s at %s was not placed.  Bid price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['bid'])
                 return
-        if order_type == 'buy_limit':
-            if value is not None:
-                amount = (Decimal(value) / Decimal(price)).quantize(COIN)
-            amount = Decimal(amount)
+        if order_type == 'buy_limit' and value is not None:
             fee_perc = Decimal(self.markets[market_id]['taker_fee'])
-            fee = (fee_perc*amount).quantize(
-                COIN, rounding='ROUND_UP')
-            amount = amount - fee
+            fee = (fee_perc * value).quantize(COIN, rounding='ROUND_UP')
+            amount = (Decimal(value - fee) / Decimal(price)).quantize(COIN)
         elif order_type == 'sell_limit' and value is not None:
-            amount = value
+            amount = Decimal(value / price).quantize(COIN)
         logging.debug("Placing %s on %s market for %s at %s",
                       order_type, self.markets[market_id]['string'], amount, price)
         self.post('/v1/user/{}'.format(order_type),
@@ -190,8 +193,8 @@ class QtradeAPI(object):
         return self._tickers
 
     def _refresh_tickers(self):
-        """ Lazy load and reload every TICKERS_UPDATE_INTERVAL. """
-        if self._tickers is None or (time.time() - self._tickers_age) > TICKERS_UPDATE_INTERVAL:
+        """ Lazy load and reload every tickers_update_interval. """
+        if self._tickers is None or (time.time() - self._tickers_age) > self.tickers_update_interval:
             res = self.get('/v1/tickers')
             self._tickers = {m['id']: m for m in res['markets']}
             self._tickers.update({m['id_hr']: m for m in res['markets']})
@@ -201,11 +204,11 @@ class QtradeAPI(object):
     def markets(self):
         """ Markets may be indexed either by id or string """
         self._refresh_markets()
-        return self._market_map
+        return self._markets_map
 
     def _refresh_markets(self):
-        """ Lazy load and reload every MARKET_UPDATE_INTERVAL. """
-        if self._markets_map is None or (time.time() - self._markets_age) > MARKET_UPDATE_INTERVAL:
+        """ Lazy load and reload every market_update_interval. """
+        if self._markets_map is None or (time.time() - self._markets_age) > self.market_update_interval:
             # Index our market information by market string
             common = self.get("/v1/common")
             self.currencies_map = {c['code']: c for c in common['currencies']}
@@ -214,11 +217,12 @@ class QtradeAPI(object):
                 m['string'] = "{market_currency}_{base_currency}".format(**m)
                 m['base_currency'] = self.currencies_map[m['base_currency']]
                 m['market_currency'] = self.currencies_map[m['market_currency']]
-            self._market_map = {m['string']: m for m in common['markets']}
-            self._market_map.update({m['id']: m for m in common['markets']})
+            self._markets_map = {m['string']: m for m in common['markets']}
+            self._markets_map.update({m['id']: m for m in common['markets']})
             self._markets_age = time.time()
 
     def _req(self, method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
+        soft_limit = int(self.rl_limit * (1 - self.rl_soft_threshold))
         # If limit is completely exhausted, sleep until full reset. Clamp to
         # min 0 to not bomb out if reset_at is in past
         if self.honor_ratelimit and self.rl_remaining <= 0:
@@ -229,8 +233,7 @@ class QtradeAPI(object):
 
         # If limit is >self.rl_soft_threshold % used, sleep the appropriate
         # amount to avoid hitting a big wait
-        soft_limit = int(self.rl_limit * (1 - self.rl_soft_threshold))
-        if self.honor_ratelimit and self.rl_remaining <= soft_limit:
+        elif self.honor_ratelimit and self.rl_remaining <= soft_limit:
             sec_to_reset = self.rl_reset_at - time.time()
             must_wait = max(0, sec_to_reset / float(self.rl_remaining))
             time.sleep(must_wait)
