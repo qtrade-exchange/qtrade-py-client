@@ -10,6 +10,8 @@ from hashlib import sha256
 from urllib.parse import urlparse
 from decimal import Decimal
 
+from pprint import pprint
+
 log = logging.getLogger("qtrade")
 
 COIN = Decimal('.00000001')
@@ -150,18 +152,18 @@ class QtradeAPI(object):
                 log.info("%s %s at %s was not placed.  Bid price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['bid'])
                 return
+        # convert value to amount if necessary
         if order_type == 'buy_limit' and value is not None:
-            fee_perc = Decimal(self.markets[market_id]['taker_fee'])
+            fee_perc = max(Decimal(self.markets[market_id]['taker_fee']), Decimal(
+                self.markets[market_id]['maker_fee']))
             fee = (fee_perc * value).quantize(COIN, rounding='ROUND_UP')
             amount = (Decimal(value - fee) / Decimal(price)).quantize(COIN)
         elif order_type == 'sell_limit' and value is not None:
             amount = Decimal(value / price).quantize(COIN)
         logging.debug("Placing %s on %s market for %s at %s",
                       order_type, self.markets[market_id]['string'], amount, price)
-        self.post('/v1/user/{}'.format(order_type),
-                  amount=str(amount),
-                  price=str(price),
-                  market_id=market_id)
+        return self.post('/v1/user/{}'.format(order_type), amount=str(amount),
+                         price=str(price), market_id=market_id)
 
     def balances_merged(self):
         """ Get total balances including order balances """
@@ -185,6 +187,18 @@ class QtradeAPI(object):
     def cancel_all_orders(self):
         for o in self.orders(open=True):
             self.post('/v1/user/cancel_order', json={'id': o['id']})
+
+    def cancel_market_orders(self, market_string=None, market_id=None):
+        if market_id is not None and market_string is not None:
+            raise ValueError(
+                "market_id and market_string are mutually exclusive")
+        elif market_id is None and market_string is None:
+            raise ValueError("either market_id or market_string are required")
+        if market_id is None:
+            market_id = self.markets[market_string]['id']
+        for o in self.orders(open=True):
+            if o['market_id'] == market_id:
+                self.post('/v1/user/cancel_order', json={'id': o['id']})
 
     @property
     def tickers(self):
