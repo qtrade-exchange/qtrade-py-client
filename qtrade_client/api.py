@@ -17,12 +17,6 @@ log = logging.getLogger("qtrade")
 COIN = Decimal('.00000001')
 
 
-class Currency(dict):
-
-    def __value__(self):
-        return self.code
-
-
 class APIException(Exception):
 
     def __init__(self, message, code, errors):
