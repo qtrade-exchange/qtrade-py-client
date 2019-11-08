@@ -156,8 +156,8 @@ class QtradeAPI(object):
         if order_type == 'buy_limit' and value is not None:
             fee_perc = max(Decimal(self.markets[market_id]['taker_fee']), Decimal(
                 self.markets[market_id]['maker_fee']))
-            fee = (fee_perc * value).quantize(COIN, rounding='ROUND_UP')
-            amount = (Decimal(value - fee) / Decimal(price)).quantize(COIN)
+            fee_mult = Decimal(fee_perc+1)
+            amount = (Decimal(value) / (fee_mult * price)).quantize(COIN)
         elif order_type == 'sell_limit' and value is not None:
             amount = Decimal(value / price).quantize(COIN)
         logging.debug("Placing %s on %s market for %s at %s",
