@@ -26,6 +26,10 @@ print(client.orders(older_than=25))
 print(client.orders(newer_than=25))
 ```
 
+## Obtaining an API key
+
+Go to the [API key](https://qtrade.io/settings/api_keys) page while signed into the qTrade website.  Check the appropriate boxes on the right hand side of the page to set permissions, then name the key and hit "Issue Key".  Copy and paste the key somewhere safe, it won't be displayed again!
+
 ## Rate Limit
 
 By default the `QtradeAPI` will honor and avoid rate limits. It does this with
