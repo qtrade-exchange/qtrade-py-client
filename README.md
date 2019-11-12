@@ -70,3 +70,12 @@ root.addHandler(handler)
 # To get logging output from the QtradeAPI class for debugging:
 logging.getLogger('qtrade').setLevel(logging.DEBUG)
 ```
+
+## Testing
+
+``` bash
+pip3 install --user pytest
+pytest
+# Or alternatively
+python3.7 -m pytest
+```
