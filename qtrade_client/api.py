@@ -107,7 +107,7 @@ class QtradeAPI(object):
         self.rs.auth = QtradeAuth(hmac_pair)
 
     def balances(self):
-        return {b['currency']: b['balance'] for b in self.get("/v1/user/balances")['balances']}
+        return {b['currency']: Decimal(b['balance']) for b in self.get("/v1/user/balances")['balances']}
 
     def get(self, endpoint, *args, **kwargs):
         return self._req('get', endpoint, *args, **kwargs)
@@ -161,22 +161,19 @@ class QtradeAPI(object):
 
     def balances_merged(self):
         """ Get total balances including order balances """
-        bals = self.balances()
-        ords = self.orders(open=True)
-        for o in ords:
-            base_c = self.markets[o['market_id']]['base_currency']['code']
-            market_c = self.markets[o['market_id']][
-                'market_currency']['code']
-            if o['order_type'] == 'buy_limit':
-                bals[base_c] = str(Decimal(bals.setdefault(
-                    base_c, 0)) + Decimal(o['base_amount']))
-            if o['order_type'] == 'sell_limit':
-                bals[market_c] = str(Decimal(bals.setdefault(
-                    market_c, 0)) + Decimal(o['market_amount_remaining']))
-        return bals
+        bals = self.balances_all()
+        merged = {}
+        for k, v in list(bals['spendable'].items()) + list(bals['in_orders'].items()):
+            merged.setdefault(k, 0)
+            merged[k] += Decimal(v)
+        return merged
 
     def balances_all(self):
-        return {b['currency']: b for b in self.get("/v1/user/balances_all")['balances']}
+        all_bal = self.get("/v1/user/balances_all")
+        return {
+            "spendable": {b['currency']: Decimal(b['balance']) for b in all_bal['balances']},
+            "in_orders": {b['currency']: Decimal(b['balance']) for b in all_bal['order_balances']},
+        }
 
     def cancel_all_orders(self):
         for o in self.orders(open=True):
@@ -209,22 +206,27 @@ class QtradeAPI(object):
             self._tickers_age = time.time()
 
     @property
+    def currencies(self):
+        self._refresh_common()
+        return self._currencies_map
+
+    @property
     def markets(self):
         """ Markets may be indexed either by id or string """
-        self._refresh_markets()
+        self._refresh_common()
         return self._markets_map
 
-    def _refresh_markets(self):
+    def _refresh_common(self):
         """ Lazy load and reload every market_update_interval. """
         if self._markets_map is None or (time.time() - self._markets_age) > self.market_update_interval:
             # Index our market information by market string
             common = self.get("/v1/common")
-            self.currencies_map = {c['code']: c for c in common['currencies']}
+            self._currencies_map = {c['code']: c for c in common['currencies']}
             # Set some convenience keys so we can pass around just the dict
             for m in common['markets']:
                 m['string'] = "{market_currency}_{base_currency}".format(**m)
-                m['base_currency'] = self.currencies_map[m['base_currency']]
-                m['market_currency'] = self.currencies_map[m['market_currency']]
+                m['base_currency'] = self._currencies_map[m['base_currency']]
+                m['market_currency'] = self._currencies_map[m['market_currency']]
             self._markets_map = {m['string']: m for m in common['markets']}
             self._markets_map.update({m['id']: m for m in common['markets']})
             self._markets_age = time.time()
