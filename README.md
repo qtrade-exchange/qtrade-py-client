@@ -79,3 +79,14 @@ pytest
 # Or alternatively
 python3.7 -m pytest
 ```
+
+For coverage information:
+
+``` bash
+pip3 install --user pytest-cov
+# For just terminal coverage summary
+python3.7 -m pytest --cov=qtrade_client tests/
+# To generate HTML reports with line coverage details..
+python3.7 -m pytest --cov-report html --cov-report term --cov=qtrade_client tests/
+google-chrome htmlcov/index.html
+```
