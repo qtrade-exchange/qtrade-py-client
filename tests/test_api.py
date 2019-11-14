@@ -238,3 +238,45 @@ def test_refresh_tickers(api):
             "last": "0.00000076"
     }]}"""))
     assert api.tickers == {20: {'ask': '0.00001499', 'bid': '0.00001332', 'day_avg_price': '0.0000146739216644', 'day_change': '-0.0893074119076549', 'day_high': '0.00001641', 'day_low': '0.00001292', 'day_open': '0.00001646', 'day_volume_base': '0.37996235', 'day_volume_market': '25893.7153059', 'id': 20, 'id_hr': 'BIS_BTC', 'last': '0.00001499'}, 8: {'ask': None, 'bid': None, 'day_avg_price': None, 'day_change': None, 'day_high': None, 'day_low': None, 'day_open': None, 'day_volume_base': '0', 'day_volume_market': '0', 'id': 8, 'id_hr': 'MMO_BTC', 'last': '0.00000076'}, 'BIS_BTC': {'ask': '0.00001499', 'bid': '0.00001332', 'day_avg_price': '0.0000146739216644', 'day_change': '-0.0893074119076549', 'day_high': '0.00001641', 'day_low': '0.00001292', 'day_open': '0.00001646', 'day_volume_base': '0.37996235', 'day_volume_market': '25893.7153059', 'id': 20, 'id_hr': 'BIS_BTC', 'last': '0.00001499'}, 'MMO_BTC': {'ask': None, 'bid': None, 'day_avg_price': None, 'day_change': None, 'day_high': None, 'day_low': None, 'day_open': None, 'day_volume_base': '0', 'day_volume_market': '0', 'id': 8, 'id_hr': 'MMO_BTC', 'last': '0.00000076'}}
+
+
+def test_orders(api):
+    api._req = mock.MagicMock(return_value=json.loads("""
+    {"orders": [
+        {
+            "id": 8980903,
+            "market_amount": "0.5672848",
+            "market_amount_remaining": "0.5672848",
+            "created_at": "2019-11-14T16:34:20.424601Z",
+            "price": "0.00651044",
+            "base_amount": "0.00371174",
+            "order_type": "buy_limit",
+            "market_id": 1,
+            "open": false,
+            "trades": null
+        },
+        {
+            "id": 8980902,
+            "market_amount": "0.37039118",
+            "market_amount_remaining": "0.37039118",
+            "created_at": "2019-11-14T16:34:20.380538Z",
+            "price": "0.00664751",
+            "base_amount": "0.00247449",
+            "order_type": "buy_limit",
+            "market_id": 1,
+            "open": true,
+            "trades": null
+        },
+        {
+            "id": 8980901,
+            "market_amount": "12973.17366652",
+            "market_amount_remaining": "12973.17366652",
+            "created_at": "2019-11-14T16:34:20.328834Z",
+            "price": "0.00000037",
+            "order_type": "sell_limit",
+            "market_id": 36,
+            "open": true,
+            "trades": null
+        }
+    ]}"""))
+    assert api.orders() == [{'id': 8980903, 'market_amount': '0.5672848', 'market_amount_remaining': '0.5672848', 'created_at': '2019-11-14T16:34:20.424601Z', 'price': '0.00651044', 'base_amount': '0.00371174', 'order_type': 'buy_limit', 'market_id': 1, 'open': False, 'trades': None}, {'id': 8980902, 'market_amount': '0.37039118', 'market_amount_remaining': '0.37039118', 'created_at': '2019-11-14T16:34:20.380538Z', 'price': '0.00664751', 'base_amount': '0.00247449', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': None}, {'id': 8980901, 'market_amount': '12973.17366652', 'market_amount_remaining': '12973.17366652', 'created_at': '2019-11-14T16:34:20.328834Z', 'price': '0.00000037', 'order_type': 'sell_limit', 'market_id': 36, 'open': True, 'trades': None}]
