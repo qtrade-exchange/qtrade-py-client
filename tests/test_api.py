@@ -67,6 +67,7 @@ def test_429_status(api):
 
 
 def test_200_exception_status(api):
+    # trying to parse the request's json will raise an exception
     def res_json():
         raise Exception
 
@@ -75,6 +76,7 @@ def test_200_exception_status(api):
 
 
 def test_300_exception_status(api):
+    # trying to parse the request's json will raise an exception
     def res_json():
         raise Exception
 
@@ -432,3 +434,49 @@ def test_clone(api):
     c = api.clone()
     assert c != api
     assert c.rs.auth is None
+
+
+def test_cancel_all_orders(api):
+    api._req = mock.MagicMock()
+    ords = [{'id': 8980903, 'market_amount': '0.5672848', 'market_amount_remaining': '0.5672848', 'created_at': '2019-11-14T16:34:20.424601Z', 'price': '0.00651044', 'base_amount': '0.00371174', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': None}, {'id': 8980902, 'market_amount': '0.37039118', 'market_amount_remaining': '0.37039118', 'created_at': '2019-11-14T16:34:20.380538Z', 'price': '0.00664751', 'base_amount': '0.00247449', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': None}, {'id': 8980901, 'market_amount': '12973.17366652', 'market_amount_remaining': '12973.17366652', 'created_at': '2019-11-14T16:34:20.328834Z', 'price': '0.00000037', 'order_type': 'sell_limit', 'market_id': 36, 'open': True, 'trades': None}]
+    api.orders = mock.MagicMock(return_value=ords)
+
+    # create a calls list, call cancel_all_orders and check the _req calls
+    api.cancel_all_orders()
+    calls = [mock.call('post', '/v1/user/cancel_order', json={'id': 8980903}), mock.call('post', '/v1/user/cancel_order', json={'id': 8980902}), mock.call('post', '/v1/user/cancel_order', json={'id': 8980901})]
+    api._req.assert_has_calls(calls, any_order=True)
+
+    # also check orders(open=True) call
+    api.orders.assert_called_with(open=True)
+
+
+def test_cancel_market_orders(api):
+    api._req = mock.MagicMock()
+    ords = [{'id': 8980903, 'market_amount': '0.5672848', 'market_amount_remaining': '0.5672848', 'created_at': '2019-11-14T16:34:20.424601Z', 'price': '0.00651044', 'base_amount': '0.00371174', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': None}, {'id': 8980902, 'market_amount': '0.37039118', 'market_amount_remaining': '0.37039118', 'created_at': '2019-11-14T16:34:20.380538Z', 'price': '0.00664751', 'base_amount': '0.00247449', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': None}, {'id': 8980901, 'market_amount': '12973.17366652', 'market_amount_remaining': '12973.17366652', 'created_at': '2019-11-14T16:34:20.328834Z', 'price': '0.00000037', 'order_type': 'sell_limit', 'market_id': 36, 'open': True, 'trades': None}]
+    api.orders = mock.MagicMock(return_value=ords)
+
+    # manually set markets map
+    api._markets_map = {'LTC_BTC': {'base_currency': {'can_withdraw': True, 'code': 'BTC', 'config': {'address_version': 0, 'default_signer': 6, 'explorerAddressURL': 'https: //live.blockcypher.com/btc/address/', 'explorerTransactionURL': 'https: //live.blockcypher.com/btc/tx/', 'p2sh_address_version': 5, 'price': 8614.27, 'required_confirmations': 2, 'required_generate_confirmations': 100, 'satoshi_per_byte': 15, 'withdraw_fee': '0.0005'}, 'long_name': 'Bitcoin', 'metadata': {'withdraw_notices': []}, 'precision': 8, 'status': 'ok', 'type': 'bitcoin_like'}, 'can_cancel': True, 'can_trade': True, 'can_view': True, 'id': 1, 'maker_fee': '0', 'market_currency': {'can_withdraw': True, 'code': 'LTC', 'config': {'additional_versions': [5], 'address_version': 48, 'default_signer': 5, 'explorerAddressURL': 'https: //live.blockcypher.com/ltc/address/', 'explorerTransactionURL': 'https: //live.blockcypher.com/ltc/tx/', 'p2sh_address_version': 50, 'price': 58.73, 'required_confirmations': 10, 'required_generate_confirmations': 100, 'satoshi_per_byte': 105, 'withdraw_fee': '0.001'}, 'long_name': 'Litecoin', 'metadata': {}, 'precision': 8, 'status': 'ok', 'type': 'bitcoin_like'}, 'metadata': {}, 'string': 'LTC_BTC', 'taker_fee': '0.005'}, 1: {'base_currency': {'can_withdraw': True, 'code': 'BTC', 'config': {'address_version': 0, 'default_signer': 6, 'explorerAddressURL': 'https: //live.blockcypher.com/btc/address/', 'explorerTransactionURL': 'https: //live.blockcypher.com/btc/tx/', 'p2sh_address_version': 5, 'price': 8614.27, 'required_confirmations': 2, 'required_generate_confirmations': 100, 'satoshi_per_byte': 15, 'withdraw_fee': '0.0005'}, 'long_name': 'Bitcoin', 'metadata': {'withdraw_notices': []}, 'precision': 8, 'status': 'ok', 'type': 'bitcoin_like'}, 'can_cancel': True, 'can_trade': True, 'can_view': True, 'id': 1, 'maker_fee': '0', 'market_currency': {'can_withdraw': True, 'code': 'LTC', 'config': {'additional_versions': [5], 'address_version': 48, 'default_signer': 5, 'explorerAddressURL': 'https: //live.blockcypher.com/ltc/address/', 'explorerTransactionURL': 'https: //live.blockcypher.com/ltc/tx/', 'p2sh_address_version': 50, 'price': 58.73, 'required_confirmations': 10, 'required_generate_confirmations': 100, 'satoshi_per_byte': 105, 'withdraw_fee': '0.001'}, 'long_name': 'Litecoin', 'metadata': {}, 'precision': 8, 'status': 'ok', 'type': 'bitcoin_like'}, 'metadata': {}, 'string': 'LTC_BTC', 'taker_fee': '0.005'}}
+
+    # prevent lazily loaded properties from updating and making api calls
+    def ret(*args, **kwargs):
+        return
+    api._refresh_common = ret
+
+    api.cancel_market_orders(market_string='LTC_BTC')
+    calls = [mock.call('post', '/v1/user/cancel_order', json={'id': 8980903}), mock.call('post', '/v1/user/cancel_order', json={'id': 8980902})]
+    api._req.assert_has_calls(calls, any_order=True)
+
+    # test with neither market_string nor market_id
+    try:
+        api.cancel_market_orders()
+        raise AssertionError
+    except(ValueError):
+        pass
+
+    # test with both market_string and market_id
+    try:
+        api.cancel_market_orders(market_string='LTC_BTC', market_id=36)
+        raise AssertionError
+    except(ValueError):
+        pass
