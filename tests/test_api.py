@@ -5,7 +5,7 @@ import unittest.mock as mock
 import time
 from decimal import Decimal
 
-from qtrade_client.api import QtradeAPI, QtradeAuth
+from qtrade_client.api import QtradeAPI, QtradeAuth, APIException
 
 
 @pytest.fixture
@@ -45,6 +45,25 @@ def test_soft_limit(api):
     api.get("/v1/common")
     # Test that the rate limit sleep was called
     time.sleep.assert_called_with(2)
+
+
+def test_300_status(api):
+    try:
+        api.rs.request = mock.MagicMock(return_value=mock.MagicMock(status_code=300))
+        api.get("/v1/common")
+        raise AssertionError
+    except(APIException):
+        pass
+
+
+def test_429_status(api):
+    try:
+        api.rs.request = mock.MagicMock(return_value=mock.MagicMock(status_code=429))
+        api.get("/v1/common")
+        raise AssertionError
+    except(APIException):
+        # the client should retry once on a 429
+        assert api.rs.request.call_count == 2
 
 
 def test_balances(api):

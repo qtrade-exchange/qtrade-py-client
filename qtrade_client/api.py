@@ -291,7 +291,7 @@ class QtradeAPI(object):
             ret = res.json()
         except Exception:
             if res.status_code > 299:
-                log.warn("{} {} {} req={} res=\n{}".format(
+                log.warning("{} {} {} req={} res=\n{}".format(
                     method, url, res.status_code, req_json, res.text))
                 raise APIException(
                     "Invalid return code from backend", res.status_code, [])
@@ -300,7 +300,7 @@ class QtradeAPI(object):
 
         if res.status_code > 299:
             if res.status_code not in silent_codes:
-                log.warn("{} {} {} req={} res=\n{}".format(
+                log.warning("{} {} {} req={} res=\n{}".format(
                     method, url, res.status_code, req_json, res.text))
             errors = [e['code'] for e in ret['errors']]
             raise APIException(
