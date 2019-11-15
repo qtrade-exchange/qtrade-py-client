@@ -290,14 +290,71 @@ def test_order(api):
     # prevent lazily loaded properties from updating and making api calls
     def ret(*args, **kwargs):
         return
-
     api._refresh_tickers = ret
     api._refresh_common = ret
 
-    def req_replacement(method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
+    # test successful sell order
+    def req_1(method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
         assert endpoint == "/v1/user/sell_limit"
-        assert kwargs == {'amount': '0.01', 'price': '1', 'market_id': 1}
+        assert kwargs == {'amount': '0.01', 'price': '1.00000000', 'market_id': 1}
         return {'order': {'id': 8987684, 'market_amount': '0.01', 'market_amount_remaining': '0.01', 'created_at': '2019-11-14T23:46:52.897345Z', 'price': '1', 'order_type': 'sell_limit', 'market_id': 1, 'open': True, 'trades': []}}
 
-    api._req = mock.MagicMock(side_effect=req_replacement)
-    assert api.order("sell_limit", 1, amount=.01, market_string="LTC_BTC", prevent_taker=True) == {'order': {'id': 8987684, 'market_amount': '0.01', 'market_amount_remaining': '0.01', 'created_at': '2019-11-14T23:46:52.897345Z', 'price': '1', 'order_type': 'sell_limit', 'market_id': 1, 'open': True, 'trades': []}}
+    api._req = mock.MagicMock(side_effect=req_1)
+    o = api.order("sell_limit", 1, amount=.01, market_string="LTC_BTC", prevent_taker=True)
+    assert o == {'order': {'id': 8987684, 'market_amount': '0.01', 'market_amount_remaining': '0.01', 'created_at': '2019-11-14T23:46:52.897345Z', 'price': '1', 'order_type': 'sell_limit', 'market_id': 1, 'open': True, 'trades': []}}
+
+    # test successful buy order
+    def req_2(method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
+        assert endpoint == "/v1/user/buy_limit"
+        assert kwargs == {'amount': '1.99004975', 'price': '0.00500000', 'market_id': 1}
+        return {'order': {'id': 8987684, 'market_amount': '1.99004975', 'market_amount_remaining': '1.99004975', 'created_at': '2019-11-14T23:46:52.897345Z', 'price': '0.00500000', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': []}}
+
+    api._req = mock.MagicMock(side_effect=req_2)
+    o = api.order("buy_limit", .005, value=.01, market_id=1)
+    assert o == {'order': {'id': 8987684, 'market_amount': '1.99004975', 'market_amount_remaining': '1.99004975', 'created_at': '2019-11-14T23:46:52.897345Z', 'price': '0.00500000', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': []}}
+
+    # test successful sell order which uses value
+    def req_3(method, endpoint, silent_codes=[], headers={}, json=None, params=None, is_retry=False, **kwargs):
+        assert endpoint == "/v1/user/sell_limit"
+        assert kwargs == {'amount': '0.01000000', 'price': '1.00000000', 'market_id': 1}
+        return {'order': {'id': 8987684, 'market_amount': '0.01000000', 'market_amount_remaining': '0.01000000', 'created_at': '2019-11-14T23:46:52.897345Z', 'price': '1.00000000', 'order_type': 'sell_limit', 'market_id': 1, 'open': True, 'trades': []}}
+
+    api._req = mock.MagicMock(side_effect=req_3)
+    o = api.order("sell_limit", 1, value=.01, market_id=1)
+    assert o == {'order': {'id': 8987684, 'market_amount': '0.01000000', 'market_amount_remaining': '0.01000000', 'created_at': '2019-11-14T23:46:52.897345Z', 'price': '1.00000000', 'order_type': 'sell_limit', 'market_id': 1, 'open': True, 'trades': []}}
+
+    # test prevented taker buy order
+    o = api.order("buy_limit", .1, value=.01, market_id=1, prevent_taker=True)
+    assert o == "order not placed"
+
+    # test prevented taker sell order
+    o = api.order("sell_limit", .001, value=.01, market_id=1, prevent_taker=True)
+    assert o == "order not placed"
+
+    # test attempted order when neither value nor amount are provided
+    try:
+        o = api.order("sell_limit", .001, market_id=1)
+        raise AssertionError
+    except(ValueError):
+        pass
+
+    # test attempted order when both value and amount are provided
+    try:
+        o = api.order("sell_limit", .001, value=.01, amount=.01, market_id=1)
+        raise AssertionError
+    except(ValueError):
+        pass
+
+    # test attempted order when neither market_id nor market_string are provided
+    try:
+        o = api.order("sell_limit", .001, value=.01)
+        raise AssertionError
+    except(ValueError):
+        pass
+
+    # test attempted order when both market_id and market_string are provided
+    try:
+        o = api.order("sell_limit", .001, value=.01, market_id=1, market_string='LTC_BTC')
+        raise AssertionError
+    except(ValueError):
+        pass
