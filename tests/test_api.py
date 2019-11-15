@@ -66,6 +66,26 @@ def test_429_status(api):
         assert api.rs.request.call_count == 2
 
 
+def test_200_exception_status(api):
+    def res_json():
+        raise Exception
+
+    api.rs.request = mock.MagicMock(return_value=mock.MagicMock(status_code=200, json=res_json))
+    assert api.get("/v1/common") is True
+
+
+def test_300_exception_status(api):
+    def res_json():
+        raise Exception
+
+    try:
+        api.rs.request = mock.MagicMock(return_value=mock.MagicMock(status_code=300, json=res_json))
+        api.get("/v1/common")
+        raise AssertionError
+    except(APIException):
+        pass
+
+
 def test_balances(api):
     api._req = mock.MagicMock(return_value=json.loads("""
   {
