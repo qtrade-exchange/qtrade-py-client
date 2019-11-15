@@ -93,8 +93,8 @@ class QtradeAPI(object):
         return type(self)(self.endpoint)
 
     def login(self, email, password):
-        """ Login with username and password to get a JWT token. Not
-        recommended for production use, but can be okay for quick testing. """
+        """ Login with username and password to get a JWT token.
+        Intended for internal testing only. """
         resp = self._req('post', "/v1/login", json={
             "email": email,
             "password": password,

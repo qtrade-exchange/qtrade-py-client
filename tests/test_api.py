@@ -2,6 +2,7 @@ import pytest
 import json
 import requests
 import unittest.mock as mock
+import time
 from decimal import Decimal
 
 from qtrade_client.api import QtradeAPI, QtradeAuth
@@ -18,6 +19,32 @@ def test_hmac():
     s.auth = QtradeAuth("256:vwj043jtrw4o5igw4oi5jwoi45g")
     r = s.prepare_request(requests.Request("GET", "http://google.com/"))
     assert r.headers["Authorization"] == "HMAC-SHA256 256:iyfC4n+bE+3hLgMJns1Z67FKA7O5qm5PgDvZHGraMTQ="
+
+
+@mock.patch("time.time", mock.MagicMock(return_value=10))
+def test_hard_limit(api):
+    api.rl_remaining = 0
+    api.rl_reset_at = 15
+    time.sleep = mock.MagicMock()
+    # Just to not bomb out on an actual request
+    api.rs.request = mock.MagicMock(return_value=mock.MagicMock(status_code=200))
+    api.get("/v1/common")
+    # Test that the rate limit sleep was called
+    time.sleep.assert_called_with(5)
+
+
+@mock.patch("time.time", mock.MagicMock(return_value=10))
+def test_soft_limit(api):
+    api.rl_remaining = 1
+    api.rl_reset_at = 12
+    api.rl_limit = 60
+    api.rl_soft_threshold = -30
+    time.sleep = mock.MagicMock()
+    # Just to not bomb out on an actual request
+    api.rs.request = mock.MagicMock(return_value=mock.MagicMock(status_code=200))
+    api.get("/v1/common")
+    # Test that the rate limit sleep was called
+    time.sleep.assert_called_with(2)
 
 
 def test_balances(api):
@@ -252,7 +279,7 @@ def test_orders(api):
             "base_amount": "0.00371174",
             "order_type": "buy_limit",
             "market_id": 1,
-            "open": false,
+            "open": true,
             "trades": null
         },
         {
@@ -279,7 +306,7 @@ def test_orders(api):
             "trades": null
         }
     ]}"""))
-    assert api.orders() == [{'id': 8980903, 'market_amount': '0.5672848', 'market_amount_remaining': '0.5672848', 'created_at': '2019-11-14T16:34:20.424601Z', 'price': '0.00651044', 'base_amount': '0.00371174', 'order_type': 'buy_limit', 'market_id': 1, 'open': False, 'trades': None}, {'id': 8980902, 'market_amount': '0.37039118', 'market_amount_remaining': '0.37039118', 'created_at': '2019-11-14T16:34:20.380538Z', 'price': '0.00664751', 'base_amount': '0.00247449', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': None}, {'id': 8980901, 'market_amount': '12973.17366652', 'market_amount_remaining': '12973.17366652', 'created_at': '2019-11-14T16:34:20.328834Z', 'price': '0.00000037', 'order_type': 'sell_limit', 'market_id': 36, 'open': True, 'trades': None}]
+    assert api.orders(open=True) == [{'id': 8980903, 'market_amount': '0.5672848', 'market_amount_remaining': '0.5672848', 'created_at': '2019-11-14T16:34:20.424601Z', 'price': '0.00651044', 'base_amount': '0.00371174', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': None}, {'id': 8980902, 'market_amount': '0.37039118', 'market_amount_remaining': '0.37039118', 'created_at': '2019-11-14T16:34:20.380538Z', 'price': '0.00664751', 'base_amount': '0.00247449', 'order_type': 'buy_limit', 'market_id': 1, 'open': True, 'trades': None}, {'id': 8980901, 'market_amount': '12973.17366652', 'market_amount_remaining': '12973.17366652', 'created_at': '2019-11-14T16:34:20.328834Z', 'price': '0.00000037', 'order_type': 'sell_limit', 'market_id': 36, 'open': True, 'trades': None}]
 
 
 def test_order(api):
@@ -358,3 +385,11 @@ def test_order(api):
         raise AssertionError
     except(ValueError):
         pass
+
+
+def test_clone(api):
+    api.set_hmac('1:11111111111')
+    assert api.rs.auth is not None
+    c = api.clone()
+    assert c != api
+    assert c.rs.auth is None
