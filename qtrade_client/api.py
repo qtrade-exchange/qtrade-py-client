@@ -93,8 +93,8 @@ class QtradeAPI(object):
         return type(self)(self.endpoint)
 
     def login(self, email, password):
-        """ Login with username and password to get a JWT token. Not
-        recommended for production use, but can be okay for quick testing. """
+        """ Login with username and password to get a JWT token.
+        Intended for internal testing only. """
         resp = self._req('post', "/v1/login", json={
             "email": email,
             "password": password,
@@ -135,17 +135,17 @@ class QtradeAPI(object):
 
         if market_string is not None:
             market_id = self.markets[market_string]['id']
-        price = Decimal(price)
+        price = Decimal(price).quantize(COIN)
         if prevent_taker is True:
             ticker = self.tickers[market_id]
             if order_type == "buy_limit" and price > Decimal(ticker['ask']):
                 log.info("%s %s at %s was not placed.  Ask price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['ask'])
-                return
+                return "order not placed"
             elif order_type == 'sell_limit' and price < Decimal(ticker['bid']):
                 log.info("%s %s at %s was not placed.  Bid price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['bid'])
-                return
+                return "order not placed"
         # convert value to amount if necessary
         if order_type == 'buy_limit' and value is not None:
             fee_perc = max(Decimal(self.markets[market_id]['taker_fee']), Decimal(
@@ -153,7 +153,7 @@ class QtradeAPI(object):
             fee_mult = Decimal(fee_perc+1)
             amount = (Decimal(value) / (fee_mult * price)).quantize(COIN)
         elif order_type == 'sell_limit' and value is not None:
-            amount = Decimal(value / price).quantize(COIN)
+            amount = (Decimal(value) / price).quantize(COIN)
         logging.debug("Placing %s on %s market for %s at %s",
                       order_type, self.markets[market_id]['string'], amount, price)
         return self.post('/v1/user/{}'.format(order_type), amount=str(amount),
@@ -291,7 +291,7 @@ class QtradeAPI(object):
             ret = res.json()
         except Exception:
             if res.status_code > 299:
-                log.warn("{} {} {} req={} res=\n{}".format(
+                log.warning("{} {} {} req={} res=\n{}".format(
                     method, url, res.status_code, req_json, res.text))
                 raise APIException(
                     "Invalid return code from backend", res.status_code, [])
@@ -300,7 +300,7 @@ class QtradeAPI(object):
 
         if res.status_code > 299:
             if res.status_code not in silent_codes:
-                log.warn("{} {} {} req={} res=\n{}".format(
+                log.warning("{} {} {} req={} res=\n{}".format(
                     method, url, res.status_code, req_json, res.text))
             errors = [e['code'] for e in ret['errors']]
             raise APIException(
