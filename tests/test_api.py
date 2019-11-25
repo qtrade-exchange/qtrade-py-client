@@ -1,7 +1,10 @@
 import pytest
 import json
 import requests
-import unittest.mock as mock
+try:
+    import unittest.mock as mock
+except ImportError:
+    import mock
 import time
 from decimal import Decimal
 

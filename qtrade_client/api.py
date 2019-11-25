@@ -10,8 +10,6 @@ from hashlib import sha256
 from urllib.parse import urlparse
 from decimal import Decimal
 
-from pprint import pprint
-
 log = logging.getLogger("qtrade")
 
 COIN = Decimal('.00000001')
