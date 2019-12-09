@@ -1191,6 +1191,10 @@ def test_order(api):
     o = api.order("sell_limit", 0.001, value=0.01, market_id=1, prevent_taker=True)
     assert o == "order not placed"
 
+    # test that null ask doesn't explode
+    api._tickers[1]["bid"] = None
+    o = api.order("sell_limit", 1, value=0.01, market_id=1, prevent_taker=True)
+
     # test attempted order when neither value nor amount are provided
     try:
         o = api.order("sell_limit", 0.001, market_id=1)

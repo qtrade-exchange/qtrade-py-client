@@ -136,11 +136,11 @@ class QtradeAPI(object):
         price = Decimal(price).quantize(COIN)
         if prevent_taker is True:
             ticker = self.tickers[market_id]
-            if order_type == "buy_limit" and price > Decimal(ticker['ask']):
+            if ticker['ask'] and order_type == "buy_limit" and price > Decimal(ticker['ask']):
                 log.info("%s %s at %s was not placed.  Ask price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['ask'])
                 return "order not placed"
-            elif order_type == 'sell_limit' and price < Decimal(ticker['bid']):
+            elif ticker['bid'] and order_type == 'sell_limit' and price < Decimal(ticker['bid']):
                 log.info("%s %s at %s was not placed.  Bid price is %s, so it would have been a taker order.",
                          market_id, order_type, price, ticker['bid'])
                 return "order not placed"
