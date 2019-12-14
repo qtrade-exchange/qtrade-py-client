@@ -2,12 +2,14 @@ import requests
 import requests.auth
 import time
 import json as _json
-import urllib.parse
+try:
+    from urllib.parse import urlparse, urljoin
+except ImportError:
+     from urlparse import urlparse, urljoin
 import logging
 import base64
 
 from hashlib import sha256
-from urllib.parse import urlparse
 from decimal import Decimal
 
 log = logging.getLogger("qtrade")
@@ -18,7 +20,7 @@ COIN = Decimal('.00000001')
 class APIException(Exception):
 
     def __init__(self, message, code, errors):
-        super().__init__(message)
+        super(APIException, self).__init__(message)
         self.code = code
         self.errors = errors
 
@@ -257,7 +259,7 @@ class QtradeAPI(object):
         for key in requests_kwarg_keys:
             requests_kwargs[key] = kwargs.pop(key, None)
 
-        url = urllib.parse.urljoin(self.endpoint, endpoint)
+        url = urljoin(self.endpoint, endpoint)
 
         # Support legacy usage of the json parameter, but prefer passing POST
         # params as kwargs
