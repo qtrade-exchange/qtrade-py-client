@@ -181,6 +181,20 @@ def test_hmac():
     )
 
 
+@mock.patch("time.time", mock.MagicMock(return_value=12345))
+def test_query_hmac(api):
+    hmac_keypair = "1:1111111111111111111111111111111111111111111111111111111111111111"
+    hashed_key = '1:4S8CauoSJcBbQsdcqpqvzN/aFyVJgADXU05eppDxiFA='
+
+    s = requests.Session()
+    s.auth = QtradeAuth(hmac_keypair)
+    r = s.prepare_request(requests.Request("GET", "https://api1.qtex.dev/v1/user/orders?open=false"))
+    assert (
+        r.headers["Authorization"]
+        == "HMAC-SHA256 " + hashed_key
+    )
+
+
 @mock.patch("time.time", mock.MagicMock(return_value=10))
 def test_hard_limit(api):
     api.rl_remaining = 0
