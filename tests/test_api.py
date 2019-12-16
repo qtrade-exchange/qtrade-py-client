@@ -188,7 +188,7 @@ def test_query_hmac(api):
 
     s = requests.Session()
     s.auth = QtradeAuth(hmac_keypair)
-    r = s.prepare_request(requests.Request("GET", "https://api1.qtex.dev/v1/user/orders?open=false"))
+    r = s.prepare_request(requests.Request("GET", "/v1/user/orders?open=false"))
     assert (
         r.headers["Authorization"]
         == "HMAC-SHA256 " + hashed_key
