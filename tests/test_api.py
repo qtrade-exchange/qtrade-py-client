@@ -181,6 +181,20 @@ def test_hmac():
     )
 
 
+@mock.patch("time.time", mock.MagicMock(return_value=12345))
+def test_query_hmac(api):
+    hmac_keypair = "1:1111111111111111111111111111111111111111111111111111111111111111"
+    hashed_key = '1:4S8CauoSJcBbQsdcqpqvzN/aFyVJgADXU05eppDxiFA='
+
+    s = requests.Session()
+    s.auth = QtradeAuth(hmac_keypair)
+    r = s.prepare_request(requests.Request("GET", "https://api.qtrade.io/v1/user/orders?open=false"))
+    assert (
+        r.headers["Authorization"]
+        == "HMAC-SHA256 " + hashed_key
+    )
+
+
 @mock.patch("time.time", mock.MagicMock(return_value=10))
 def test_hard_limit(api):
     api.rl_remaining = 0
@@ -534,6 +548,7 @@ def test_sell_order(api_with_market):
         "sell_limit", 1, amount=0.01, market_string="LTC_BTC", prevent_taker=True
     )
     assert o == ret
+    api._req.assert_called_with('post', '/v1/user/sell_limit', amount='0.01', market_id=1, price='1.00000000')
 
 
 def test_buy_order(api_with_market):
@@ -545,6 +560,7 @@ def test_buy_order(api_with_market):
     api._req = mock.MagicMock(return_value=ret)
     o = api.order("buy_limit", 0.005, value=0.01, market_id=1)
     assert o == ret
+    api._req.assert_called_with('post', '/v1/user/buy_limit', amount='1.99004975', market_id=1, price='0.00500000')
 
 
 def test_sell_order_value(api_with_market):
@@ -559,6 +575,7 @@ def test_sell_order_value(api_with_market):
     assert o['order']['market_amount'] == ret['order']['market_amount']
     assert o['order']['market_amount_remaining'] == ret['order']['market_amount_remaining']
     assert o ['order']['price'] == ret['order']['price']
+    api._req.assert_called_with('post', '/v1/user/sell_limit', amount='0.01000000', market_id=1, price='1.00000000')
 
 
 def test_prevented_taker_buy(api_with_market):
