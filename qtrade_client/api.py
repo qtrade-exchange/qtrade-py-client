@@ -25,34 +25,40 @@ class APIException(Exception):
         self.errors = errors
 
 
+def hmac_generate(key, url_path, method, body=None, _time=None):
+    # modify and return the request
+    now = time.time() if _time is None else _time
+    timestamp = str(int(now))
+    url_obj = urlparse(url_path)
+
+    request_details = method + "\n"
+    uri = url_obj.path
+    if url_obj.query:
+        uri += "?" + url_obj.query
+    request_details += uri + "\n"
+    request_details += timestamp + "\n"
+    if body is not None:
+        if isinstance(body, str):
+            request_details += body + "\n"
+        else:
+            request_details += body + "\n"
+    else:
+        request_details += "\n"
+    request_details += key
+    hsh = sha256(request_details.encode("utf8")).digest()
+    signature = base64.b64encode(hsh)
+    return timestamp, signature.decode('utf8')
+
+
 class QtradeAuth(requests.auth.AuthBase):
 
     def __init__(self, key):
         self.key_id, self.key = key.split(":")
 
     def __call__(self, req):
-        # modify and return the request
-        timestamp = str(int(time.time()))
-        url_obj = urlparse(req.url)
-
-        request_details = req.method + "\n"
-        uri = url_obj.path
-        if url_obj.query:
-            uri += "?" + url_obj.query
-        request_details += uri + "\n"
-        request_details += timestamp + "\n"
-        if req.body:
-            if isinstance(req.body, str):
-                request_details += req.body + "\n"
-            else:
-                request_details += req.body.decode('utf8') + "\n"
-        else:
-            request_details += "\n"
-        request_details += self.key
-        hsh = sha256(request_details.encode("utf8")).digest()
-        signature = base64.b64encode(hsh)
+        timestamp, signature = hmac_generate(self.key, req.url, req.method, body=req.body)
         req.headers.update({
-            "Authorization": "HMAC-SHA256 {}:{}".format(self.key_id, signature.decode("utf8")),
+            "Authorization": "HMAC-SHA256 {}:{}".format(self.key_id, signature),
             "HMAC-Timestamp": timestamp
         })
         return req
