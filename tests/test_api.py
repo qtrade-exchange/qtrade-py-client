@@ -10,7 +10,7 @@ except ImportError:
 import time
 from decimal import Decimal
 
-from qtrade_client.api import QtradeAPI, QtradeAuth, APIException
+from qtrade_client.api import QtradeAPI, QtradeAuth, APIException, hmac_generate
 
 
 @pytest.fixture
@@ -193,6 +193,15 @@ def test_query_hmac(api):
         r.headers["Authorization"]
         == "HMAC-SHA256 " + hashed_key
     )
+
+
+def test_query_hmac_bytes(api):
+    # Ensure that we encode the bytes body correctly
+    hmac_generate("1111111111111111111111111111111111111111111111111111111111111111",
+                  "/v1/user/orders?open=false",
+                  "GET",
+                  body=bytes(),
+                  _time=12345)
 
 
 @mock.patch("time.time", mock.MagicMock(return_value=10))

@@ -41,7 +41,7 @@ def hmac_generate(key, url_path, method, body=None, _time=None):
         if isinstance(body, str):
             request_details += body + "\n"
         else:
-            request_details += body + "\n"
+            request_details += body.decode('utf8') + "\n"
     else:
         request_details += "\n"
     request_details += key
