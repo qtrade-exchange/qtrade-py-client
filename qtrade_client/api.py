@@ -283,7 +283,7 @@ class QtradeAPI(object):
         self.rl_limit = int(res.headers.get('X-Ratelimit-Limit', 100))
         self.rl_remaining = int(res.headers.get('X-Ratelimit-Remaining', 99))
         if requests_kwargs.get('stream') is True:
-            log.debug("GET streaming {}".format(url))
+            log.debug("GET streaming {}".format(endpoint))
             for ln in res.iter_lines():
                 print(ln.decode('utf8'))
             return
@@ -298,7 +298,7 @@ class QtradeAPI(object):
         except Exception:
             if res.status_code > 299:
                 log.warning("{} {} {} req={} res=\n{}".format(
-                    method, url, res.status_code, req_json, res.text))
+                    method, endpoint, res.status_code, req_json, res.text))
                 raise APIException(
                     "Invalid return code from backend", res.status_code, [])
             else:
@@ -307,10 +307,10 @@ class QtradeAPI(object):
         if res.status_code > 299:
             if res.status_code not in silent_codes:
                 log.warning("{} {} {} req={} res=\n{}".format(
-                    method, url, res.status_code, req_json, res.text))
+                    method, endpoint, res.status_code, req_json, res.text))
             errors = [e['code'] for e in ret['errors']]
             raise APIException(
                 "Invalid return code from backend", res.status_code, errors)
 
-        log.debug("GET {} req={} res={}".format(url, req_json, ret))
+        log.debug("GET {} req={} res={}".format(endpoint, req_json, ret))
         return ret['data']
