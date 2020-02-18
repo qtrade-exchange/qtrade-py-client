@@ -6,8 +6,8 @@ except ImportError:
 setup(
     name='qtrade_client',
     install_requires=[
-        'click',
-        'requests'
+        'click>=6.7',
+        'requests>=2.20.0'
     ],
     version='0.1',
     packages=['qtrade_client', 'qtrade_client.cli'],
